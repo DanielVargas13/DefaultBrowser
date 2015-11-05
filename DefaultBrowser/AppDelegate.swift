@@ -151,6 +151,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setUpPreferencesBrowsers()
         showWindowCheckbox.state = defaults.openWindowOnLaunch ? NSOnState : NSOffState
         descriptiveAppNamesCheckbox.state = defaults.detailedAppNames ? NSOnState : NSOffState
+        
+        // register services
+        NSApplication.sharedApplication().servicesProvider = self
     }
     
     func setUpPreferencesBrowsers() {
@@ -181,6 +184,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSAppleEventManager.sharedAppleEventManager().removeEventHandlerForEventClass(UInt32(kInternetEventClass), andEventID: UInt32(kAEGetURL))
     }
 
+    // MARK: Services
+    
+    func openLink(pasteboard: NSPasteboard, userData: String, error: NSErrorPointer) -> NSURL? {
+        // code here
+        print(userData)
+        let classes: [AnyClass] = [NSString.self, NSURL.self]
+        if !pasteboard.canReadObjectForClasses(classes, options: nil) {
+            error.memory = NSError(domain: "Couldn't find a link.", code: 1, userInfo: nil)
+        }
+        
+        print(pasteboard.availableTypeFromArray([NSURLPboardType, NSPasteboardTypeString]))
+        
+        if let string = pasteboard.stringForType(NSPasteboardTypeString) {
+            return NSURL(string: string)
+        } else if let url = pasteboard.dataForType(NSURLPboardType) {
+            if #available(OSX 10.11, *) {
+                return NSURL(dataRepresentation: url, relativeToURL: nil)
+            } else if let urlString = NSString(data: url, encoding: NSUTF8StringEncoding) as? String {
+                return NSURL(string: urlString)
+            }
+        }
+        return nil
+    }
+
+    func openLinkSafari(pasteboard: NSPasteboard, userData: String, error: NSErrorPointer) {
+        if let url = openLink(pasteboard, userData: userData, error: error) {
+            workspace.openURLs([url], withAppBundleIdentifier: "com.apple.Safari", options: .Default, additionalEventParamDescriptor: nil, launchIdentifiers: nil)
+        }
+    }
+    
+    func openLinkChrome(pasteboard: NSPasteboard, userData: String, error: NSErrorPointer) {
+        if let url = openLink(pasteboard, userData: userData, error: error) {
+            workspace.openURLs([url], withAppBundleIdentifier: "com.google.Chrome", options: .Default, additionalEventParamDescriptor: nil, launchIdentifiers: nil)
+        }
+    }
+    
+    func openLinkFirefox(pasteboard: NSPasteboard, userData: String, error: NSErrorPointer) {
+        if let url = openLink(pasteboard, userData: userData, error: error) {
+            workspace.openURLs([url], withAppBundleIdentifier: "org.mozilla.Firefox", options: .Default, additionalEventParamDescriptor: nil, launchIdentifiers: nil)
+        }
+    }
+    
     // MARK: Signal/Notification Responses
     
     // Respond to the user opening a link
